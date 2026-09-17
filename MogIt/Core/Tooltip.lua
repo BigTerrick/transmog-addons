@@ -85,7 +85,7 @@ function mog.tooltip.ShowItem(self)
 	
 	local db = mog.db.profile
 	local tooltip = mog.tooltip
-	if db.tooltip and (not tooltip.mod[db.tooltipMod] or tooltip.mod[db.tooltipMod]()) then
+	if db.tooltip and (not db.tooltipMod or not tooltip.mod[db.tooltipMod] or tooltip.mod[db.tooltipMod]()) then
 		if not self[mog] then
 			if tooltip.item ~= itemLink then
 				tooltip.item = itemLink;
@@ -99,7 +99,7 @@ function mog.tooltip.ShowItem(self)
 					end
 				end
 				local slot = select(9,GetItemInfo(itemLink));
-				if (not db.tooltipMog ) and tooltip.slots[slot] and IsDressableItem(itemLink) then
+				if slot and tooltip.slots[slot] and IsDressableItem(itemLink) then
 					tooltip.model:SetFacing(tooltip.slots[slot]-(db.tooltipRotate and 0.5 or 0));
 					tooltip:Show();
 					tooltip.owner = self;
@@ -146,26 +146,61 @@ end);
 
 mog.tooltip.repos = CreateFrame("Frame");
 mog.tooltip.repos:Hide();
-mog.tooltip.repos:SetScript("OnUpdate",function(self)
-	local x,y = mog.tooltip.owner:GetCenter();
+mog.tooltip.repos.elapsed = 0;
+mog.tooltip.repos:SetScript("OnUpdate",function(self, elapsed)
+	self.elapsed = self.elapsed + elapsed;
+	if self.elapsed < 0.05 then return; end
+	self.elapsed = 0;
+
+	local owner = mog.tooltip.owner;
+	local x,y = owner:GetCenter();
 	if x and y then
 		mog.tooltip:ClearAllPoints();
-		local mogpoint,ownerpoint;
-		if y/GetScreenHeight() > 0.5 then
-			mogpoint = "TOP";
-			ownerpoint = "BOTTOM";
-		else
-			mogpoint = "BOTTOM";
-			ownerpoint = "TOP";
+		
+		-- Check if TSM is loaded and active
+		local isTSMLoaded = IsAddOnLoaded("TradeSkillMaster") or _G["TradeSkillMaster"];
+		local hasTSMLines = false;
+		
+		if isTSMLoaded then
+			for i = 1, owner:NumLines() do
+				local textLeft = _G["GameTooltipTextLeft" .. i];
+				if textLeft then
+					local text = textLeft:GetText();
+					if text and (text:find("TradeSkillMaster") or text:find("TSM")) then
+						hasTSMLines = true;
+						break;
+					end
+				end
+			end
 		end
-		if x/GetScreenWidth() > 0.5 then
-			mogpoint = mogpoint.."LEFT";
-			ownerpoint = ownerpoint.."LEFT";
+
+		-- Side-anchor ONLY if TSM is loaded AND it's un-embedded (no TSM lines in GameTooltip)
+		if isTSMLoaded and not hasTSMLines then
+			if x/GetScreenWidth() > 0.5 then
+				mog.tooltip:SetPoint("BOTTOMRIGHT", owner, "BOTTOMLEFT", -5, 0);
+			else
+				mog.tooltip:SetPoint("BOTTOMLEFT", owner, "BOTTOMRIGHT", 5, 0);
+			end
 		else
-			mogpoint = mogpoint.."RIGHT";
-			ownerpoint = ownerpoint.."RIGHT";
+			-- Standard positioning when TSM is disabled or embedded
+			local mogpoint, ownerpoint;
+			if y/GetScreenHeight() > 0.5 then
+				mogpoint = "TOP";
+				ownerpoint = "BOTTOM";
+			else
+				mogpoint = "BOTTOM";
+				ownerpoint = "TOP";
+			end
+			if x/GetScreenWidth() > 0.5 then
+				mogpoint = mogpoint.."LEFT";
+				ownerpoint = ownerpoint.."LEFT";
+			else
+				mogpoint = mogpoint.."RIGHT";
+				ownerpoint = ownerpoint.."RIGHT";
+			end
+			mog.tooltip:SetPoint(mogpoint, owner, ownerpoint);
 		end
-		mog.tooltip:SetPoint(mogpoint,mog.tooltip.owner,ownerpoint);
+		
 		self:Hide();
 	end
 end);
@@ -208,6 +243,8 @@ mog.tooltip.slots = {
 };
 
 mog.tooltip.mod = {
+	[''] = function() return true end,
+	None = function() return true end,
 	Shift = IsShiftKeyDown,
 	Ctrl = IsControlKeyDown,
 	Alt = IsAltKeyDown,
