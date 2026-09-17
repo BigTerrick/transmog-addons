@@ -56,7 +56,8 @@ function f.dd.initialize(self)
 			info = UIDropDownMenu_CreateInfo();
 			info.text =	_G["ITEM_QUALITY"..v.."_DESC"];
 			info.value = v;
-			info.colorCode = colours[v].hex;
+            local r, g, b, hex = GetItemQualityColor(v);
+            info.colorCode = hex or "|cffffffff";
 			info.func = f.dd.Tier1;
 			info.keepShownOnClick = true;
 			info.isNotRadio = true;
